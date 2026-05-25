@@ -51,7 +51,6 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Full Name",
-   "read_only_depends_on": "eval:!doc.__islocal",
    "reqd": 1
   },
   {

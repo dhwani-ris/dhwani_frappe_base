@@ -433,6 +433,8 @@ class UserManager(Document):
 
 					if dhwani_normalized != user_normalized:
 						setattr(user_doc, fieldname, dhwani_value)
+						if fieldname == "full_name" and hasattr(user_doc, "first_name"):
+							user_doc.first_name = dhwani_value or ""
 						has_changes = True
 
 		status = getattr(self, "status", STATUS_ACTIVE)
