@@ -504,7 +504,9 @@ class UserManager(Document):
 				self.email, password_value, doctype="User", fieldname="password", logout_all_sessions=False
 			)
 
-			frappe.db.set_value("User Manager", self.name, "new_password", None)
+			frappe.db.set_value(
+				"User Manager", self.name, "new_password", None, update_modified=False
+			)
 
 			frappe.msgprint(
 				_("Password updated successfully for user {0}").format(self.email),

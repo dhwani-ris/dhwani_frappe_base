@@ -177,3 +177,37 @@ class IntegrationTestUserManager(IntegrationTestCase):
 		doc.insert(ignore_permissions=True)
 
 		self.assertEqual(doc.get("table_fkmn"), [])
+
+	def test_update_password_does_not_cause_timestamp_mismatch_on_next_save(self):
+		"""Clearing new_password after a password change must not silently advance
+		`modified` behind the client's back, or the very next save fails with
+		TimestampMismatchError even though nothing else changed."""
+		email = "test_password_timestamp@example.com"
+		for doctype in ("User Manager", "User"):
+			if frappe.db.exists(doctype, email):
+				frappe.delete_doc(doctype, email, force=True, ignore_permissions=True)
+
+		doc = frappe.get_doc(
+			{
+				"doctype": "User Manager",
+				"email": email,
+				"full_name": "Test Password Timestamp",
+				"role_profiles": [{"role_profile": self.role_profile_name}],
+			}
+		)
+		doc.insert(ignore_permissions=True)
+
+		doc.new_password = "SomeStrongPassword123!"
+		doc.save(ignore_permissions=True)
+
+		db_modified = frappe.db.get_value("User Manager", doc.name, "modified")
+		self.assertEqual(
+			str(db_modified),
+			str(doc.modified),
+			"new_password cleanup must not advance `modified` beyond what the client received",
+		)
+
+		# Should not raise TimestampMismatchError: the client's in-memory `modified`
+		# must still match the DB after the password-change save.
+		doc.full_name = "Test Password Timestamp Updated"
+		doc.save(ignore_permissions=True)
