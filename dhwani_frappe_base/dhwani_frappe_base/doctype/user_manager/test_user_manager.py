@@ -71,4 +71,35 @@ class IntegrationTestUserManager(IntegrationTestCase):
 	Use this class for testing interactions between multiple components.
 	"""
 
-	pass
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.role_profile_name = "Test UM Role Profile"
+		if not frappe.db.exists("Role Profile", cls.role_profile_name):
+			frappe.get_doc(
+				{
+					"doctype": "Role Profile",
+					"role_profile": cls.role_profile_name,
+					"roles": [{"role": "System Manager"}],
+				}
+			).insert(ignore_permissions=True)
+
+	def test_program_access_is_not_mandatory(self):
+		"""User Manager should save without any Program Access / User Permission rows."""
+		email = "test_program_access_optional@example.com"
+		for doctype in ("User Manager", "User"):
+			if frappe.db.exists(doctype, email):
+				frappe.delete_doc(doctype, email, force=True, ignore_permissions=True)
+
+		doc = frappe.get_doc(
+			{
+				"doctype": "User Manager",
+				"email": email,
+				"full_name": "Test Program Access Optional",
+				"role_profiles": [{"role_profile": self.role_profile_name}],
+			}
+		)
+		# Should not raise, even with an empty Program Access table
+		doc.insert(ignore_permissions=True)
+
+		self.assertEqual(doc.get("table_fkmn"), [])

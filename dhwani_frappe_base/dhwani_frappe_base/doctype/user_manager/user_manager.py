@@ -78,11 +78,9 @@ class UserManager(Document):
 		self._validate_allowed_modules()
 
 		program_access_table = self._get_program_access_table()
-		if not program_access_table or len(program_access_table) == 0:
-			frappe.throw(_("Please add at least one User Permission"))
-
-		# Validate for duplicate projects and programs
-		self._validate_program_access_duplicates(program_access_table)
+		if program_access_table:
+			# Validate for duplicate projects and programs
+			self._validate_program_access_duplicates(program_access_table)
 
 		new_password = self.get("new_password")
 		if new_password:
