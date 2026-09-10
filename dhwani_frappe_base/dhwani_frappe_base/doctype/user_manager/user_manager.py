@@ -81,6 +81,7 @@ class UserManager(Document):
 		if program_access_table:
 			# Validate for duplicate projects and programs
 			self._validate_program_access_duplicates(program_access_table)
+			self._validate_program_access_hierarchy(program_access_table)
 
 		new_password = self.get("new_password")
 		if new_password:
@@ -546,6 +547,50 @@ class UserManager(Document):
 					_("Duplicate Program Access entry: {0} - {1}").format(row.program, row.project)
 				)
 			seen.add(key)
+
+	def _validate_program_access_hierarchy(self, program_access_table):
+		"""Validate that a row's value is consistent with any linked doctype's value
+		also selected in the Program Access table.
+
+		Example: if the table has {program: "State", project: "Delhi"} and
+		{program: "District", project: "Gurgaon"}, and District has a Link field to
+		State, Gurgaon must actually belong to Delhi (or to another State also
+		present in the table) - otherwise the row is rejected. Client-side filtering
+		steers users away from picking an inconsistent value, but since Program
+		Access can be written directly via the API, this is enforced here too.
+		"""
+		rows = [row for row in program_access_table if row.program and row.project]
+		if len(rows) < 2:
+			return
+
+		values_by_program = {}
+		for row in rows:
+			values_by_program.setdefault(row.program, set()).add(row.project)
+
+		for row in rows:
+			try:
+				meta = frappe.get_meta(row.program)
+			except Exception:
+				continue
+
+			for field in meta.fields:
+				if field.fieldtype != "Link" or not field.options:
+					continue
+
+				allowed_values = values_by_program.get(field.options)
+				if not allowed_values:
+					continue
+
+				actual_value = frappe.db.get_value(row.program, row.project, field.fieldname)
+				if actual_value and actual_value not in allowed_values:
+					frappe.throw(
+						_("{0} {1} does not belong to the selected {2} ({3})").format(
+							row.program,
+							row.project,
+							field.options,
+							", ".join(sorted(allowed_values)),
+						)
+					)
 
 	def _get_all_roles(self):
 		"""Get all roles from role_profiles"""

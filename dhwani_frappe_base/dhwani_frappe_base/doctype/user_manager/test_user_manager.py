@@ -84,6 +84,80 @@ class IntegrationTestUserManager(IntegrationTestCase):
 				}
 			).insert(ignore_permissions=True)
 
+		cls._ensure_state("Test UM Delhi", "TUD")
+		cls._ensure_state("Test UM Maharashtra", "TUM")
+		cls._ensure_district("Test UM Gurgaon", "TUG", "Test UM Delhi")
+
+	@classmethod
+	def _ensure_state(cls, state_name, state_code):
+		if not frappe.db.exists("State", state_name):
+			frappe.get_doc(
+				{"doctype": "State", "state_name": state_name, "state_code": state_code}
+			).insert(ignore_permissions=True)
+
+	@classmethod
+	def _ensure_district(cls, district_name, district_code, state_name):
+		if not frappe.db.exists("District", district_name):
+			frappe.get_doc(
+				{
+					"doctype": "District",
+					"district_name": district_name,
+					"district_code": district_code,
+					"state": state_name,
+				}
+			).insert(ignore_permissions=True)
+
+	def _make_user_manager(self, email, program_access_rows):
+		for doctype in ("User Manager", "User"):
+			if frappe.db.exists(doctype, email):
+				frappe.delete_doc(doctype, email, force=True, ignore_permissions=True)
+
+		return frappe.get_doc(
+			{
+				"doctype": "User Manager",
+				"email": email,
+				"full_name": "Test Hierarchy User",
+				"role_profiles": [{"role_profile": self.role_profile_name}],
+				"table_fkmn": program_access_rows,
+			}
+		)
+
+	def test_program_access_hierarchy_allows_consistent_values(self):
+		"""District that actually belongs to the selected State should be allowed."""
+		doc = self._make_user_manager(
+			"test_hierarchy_consistent@example.com",
+			[
+				{"program": "State", "project": "Test UM Delhi"},
+				{"program": "District", "project": "Test UM Gurgaon"},
+			],
+		)
+		# Should not raise
+		doc.insert(ignore_permissions=True)
+
+	def test_program_access_hierarchy_blocks_inconsistent_values(self):
+		"""District that belongs to a different State than the one selected should be rejected."""
+		doc = self._make_user_manager(
+			"test_hierarchy_inconsistent@example.com",
+			[
+				{"program": "State", "project": "Test UM Maharashtra"},
+				{"program": "District", "project": "Test UM Gurgaon"},
+			],
+		)
+		with self.assertRaises(frappe.ValidationError):
+			doc.insert(ignore_permissions=True)
+
+	def test_program_access_hierarchy_ignores_unrelated_doctypes(self):
+		"""Doctypes with no Link relationship between them should not be cross-checked."""
+		doc = self._make_user_manager(
+			"test_hierarchy_unrelated@example.com",
+			[
+				{"program": "Role Profile", "project": self.role_profile_name},
+				{"program": "District", "project": "Test UM Gurgaon"},
+			],
+		)
+		# Should not raise: Role Profile has no Link field pointing at District (or vice versa)
+		doc.insert(ignore_permissions=True)
+
 	def test_program_access_is_not_mandatory(self):
 		"""User Manager should save without any Program Access / User Permission rows."""
 		email = "test_program_access_optional@example.com"
