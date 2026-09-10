@@ -537,10 +537,17 @@ class UserManager(Document):
 			frappe.throw(_("Error deleting User record: {0}").format(e))
 
 	def _validate_program_access_duplicates(self, program_access_table):
-		"""Validate that there are no duplicate projects or programs in Program Access table"""
-		projects = [row.project for row in program_access_table if row.project]
-		if len(projects) != len(set(projects)):
-			frappe.throw(_("Value must be unique"))
+		"""Validate that there are no duplicate (program, project) pairs in Program Access table"""
+		seen = set()
+		for row in program_access_table:
+			if not row.project:
+				continue
+			key = (row.program, row.project)
+			if key in seen:
+				frappe.throw(
+					_("Duplicate Program Access entry: {0} - {1}").format(row.program, row.project)
+				)
+			seen.add(key)
 
 	def _get_all_roles(self):
 		"""Get all roles from role_profiles"""
